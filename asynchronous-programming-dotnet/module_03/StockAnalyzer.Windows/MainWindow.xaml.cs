@@ -37,10 +37,24 @@ namespace StockAnalyzer.Windows
             Search.Content = "Cancel";
             #endregion
 
-            await Task.Run(() =>
+            var loadLinesTask = Task.Run(async () =>
             {
-                var lines = File.ReadAllLines(@"StockPrices_Small.csv");
+                using (var stream = new StreamReader(File.OpenRead(@"StockPrices_small.csv")))
+                {
+                    var lines = new List<string>();
 
+                    string line;
+                    while ((line = await stream.ReadLineAsync()) != null)
+                    {
+                        lines.Add(line);
+                    }
+                    return lines;
+                }
+            });
+
+            var processStaockTask = loadLinesTask.ContinueWith(t =>
+            {
+                var lines = t.Result;
                 var data = new List<StockPrice>();
 
                 foreach (var line in lines.Skip(1))
@@ -64,14 +78,13 @@ namespace StockAnalyzer.Windows
                 {
                     Stocks.ItemsSource = data.Where(price => price.Ticker == Ticker.Text);
                 });
-
             });
 
-            #region After stock data is loaded
+         #region After stock data is loaded
             StocksStatus.Text = $"Loaded stocks for {Ticker.Text} in {watch.ElapsedMilliseconds}ms";
             StockProgress.Visibility = Visibility.Hidden;
             Search.Content = "Search";
-            #endregion
+            #endregion)
         }
 
         private Task<List<string>> SearchForStocks(CancellationToken cancellationToken)
@@ -112,3 +125,29 @@ namespace StockAnalyzer.Windows
         }
     }
 }
+
+
+
+//var data = new List<StockPrice>();
+
+//foreach (var line in lines.Skip(1))
+//{
+//    var segments = line.Split(',');
+
+//    for (var i = 0; i < segments.Length; i++) segments[i] = segments[i].Trim('\'', '"');
+//    var price = new StockPrice
+//    {
+//        Ticker = segments[0],
+//        TradeDate = DateTime.ParseExact(segments[1], "M/d/yyyy h:mm:ss tt",
+//            CultureInfo.InvariantCulture),
+//        Volume = Convert.ToInt32(segments[6]),
+//        Change = Convert.ToDecimal(segments[7]),
+//        ChangePercent = Convert.ToDecimal(segments[8]),
+//    };
+//    data.Add(price);
+//}
+
+//Dispatcher.Invoke(() =>
+//{
+//    Stocks.ItemsSource = data.Where(price => price.Ticker == Ticker.Text);
+//});
