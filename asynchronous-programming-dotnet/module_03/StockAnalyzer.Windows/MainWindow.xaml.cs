@@ -37,22 +37,14 @@ namespace StockAnalyzer.Windows
             Search.Content = "Cancel";
             #endregion
 
-            var loadLinesTask = Task.Run(async () =>
+            var loadLinesTask = Task.Run(() =>
             {
-                using (var stream = new StreamReader(File.OpenRead(@"StockPrices_small.csv")))
-                {
-                    var lines = new List<string>();
+                var lines = File.ReadAllLines(@"ABC.csv");
 
-                    string line;
-                    while ((line = await stream.ReadLineAsync()) != null)
-                    {
-                        lines.Add(line);
-                    }
-                    return lines;
-                }
+                return lines;
             });
 
-            var processStaockTask = loadLinesTask.ContinueWith(t =>
+            var processStocksTask = loadLinesTask.ContinueWith(t =>
             {
                 var lines = t.Result;
                 var data = new List<StockPrice>();
@@ -78,13 +70,39 @@ namespace StockAnalyzer.Windows
                 {
                     Stocks.ItemsSource = data.Where(price => price.Ticker == Ticker.Text);
                 });
-            });
+            }, TaskContinuationOptions.OnlyOnRanToCompletion);
 
-         #region After stock data is loaded
-            StocksStatus.Text = $"Loaded stocks for {Ticker.Text} in {watch.ElapsedMilliseconds}ms";
-            StockProgress.Visibility = Visibility.Hidden;
-            Search.Content = "Search";
-            #endregion)
+            loadLinesTask.ContinueWith(t =>
+            {
+                Dispatcher.Invoke(() =>
+                {
+                    Notes.Text = t.Exception.InnerException.Message;
+                });
+            }, TaskContinuationOptions.OnlyOnFaulted);
+
+            processStocksTask.ContinueWith(_ =>
+                {
+
+                    Dispatcher.Invoke(() =>
+                    {
+                        #region After stock data is loaded
+                        StocksStatus.Text = $"Loaded stocks for {Ticker.Text} in {watch.ElapsedMilliseconds}ms";
+                        StockProgress.Visibility = Visibility.Hidden;
+                        Search.Content = "Search";
+                        #endregion
+                    });
+                });
+
+
+            //processStocksTask.ContinueWith(_ =>
+            //{
+            //    #region After stock data is loaded
+            //    StocksStatus.Text = $"Loaded stocks for {Ticker.Text} in {watch.ElapsedMilliseconds}ms";
+            //    StockProgress.Visibility = Visibility.Hidden;
+            //    Search.Content = "Search";
+            //    #endregion
+            //});
+
         }
 
         private Task<List<string>> SearchForStocks(CancellationToken cancellationToken)
@@ -125,29 +143,3 @@ namespace StockAnalyzer.Windows
         }
     }
 }
-
-
-
-//var data = new List<StockPrice>();
-
-//foreach (var line in lines.Skip(1))
-//{
-//    var segments = line.Split(',');
-
-//    for (var i = 0; i < segments.Length; i++) segments[i] = segments[i].Trim('\'', '"');
-//    var price = new StockPrice
-//    {
-//        Ticker = segments[0],
-//        TradeDate = DateTime.ParseExact(segments[1], "M/d/yyyy h:mm:ss tt",
-//            CultureInfo.InvariantCulture),
-//        Volume = Convert.ToInt32(segments[6]),
-//        Change = Convert.ToDecimal(segments[7]),
-//        ChangePercent = Convert.ToDecimal(segments[8]),
-//    };
-//    data.Add(price);
-//}
-
-//Dispatcher.Invoke(() =>
-//{
-//    Stocks.ItemsSource = data.Where(price => price.Ticker == Ticker.Text);
-//});
