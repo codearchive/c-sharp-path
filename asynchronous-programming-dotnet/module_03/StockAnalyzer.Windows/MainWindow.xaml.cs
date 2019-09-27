@@ -58,30 +58,43 @@ namespace StockAnalyzer.Windows
             {
                 var tickers = Ticker.Text.Split(',', ' ');
 
-                var service = new MockStockService();
+                var service = new StockService();
+                var stocks = new ConcurrentBag<StockPrice>();
 
                 var tickerLoadingTasks = new List<Task<IEnumerable<StockPrice>>>();
                 foreach (var ticker in tickers)
                 {
-                    var loadTask = service.GetStockPricesFor(ticker, cancellationTokenSource.Token);
+                    var loadTask = service.GetStockPricesFor(ticker, cancellationTokenSource.Token).ContinueWith(t =>
+                    {
+                        foreach (var stock in t.Result.Take(5))
+                        {
+                            stocks.Add(stock);
+                        }
+
+                        Dispatcher.Invoke(() => { Stocks.ItemsSource = stocks.ToArray(); });
+
+                        return t.Result;
+                    });
 
                     tickerLoadingTasks.Add(loadTask);
                 }
 
-                var timoutTask = Task.Delay(2000);
-
                 var allStocksLoadingTask = Task.WhenAll(tickerLoadingTasks);
 
-                var completedTask = await Task.WhenAny(timoutTask, allStocksLoadingTask);
+                //#region Handling Timeout
+                //var timoutTask = Task.Delay(2000);
 
-                if (completedTask == timoutTask)
-                {
-                    cancellationTokenSource.Cancel();
-                    cancellationTokenSource = null;
-                    throw new Exception("Timeout!");
-                }
+                //var completedTask = await Task.WhenAny(timoutTask, allStocksLoadingTask);
 
-                Stocks.ItemsSource = allStocksLoadingTask.Result.SelectMany(stocks => stocks);
+                //if (completedTask == timoutTask)
+                //{
+                //    cancellationTokenSource.Cancel();
+                //    cancellationTokenSource = null;
+                //    throw new Exception("Timeout!");
+                //}
+                //#endregion
+
+                await allStocksLoadingTask;
             }
             catch (Exception exception)
             {
