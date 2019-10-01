@@ -68,62 +68,37 @@ namespace StockAnalyzer.Windows
                 }
                 #endregion
 
-                var loadedStocks = (await Task.WhenAll(tickerLoadingTasks)).SelectMany(stocks => stocks);
+                var loadedStocks = await Task.WhenAll(tickerLoadingTasks);
 
-                Parallel.Invoke(new ParallelOptions { MaxDegreeOfParallelism = 2}, 
-                    () =>
-                                            {
-                                                #region Starting
-                                                Debug.WriteLine("Starting Operation 1");
-                                                #endregion
+                var values = new ConcurrentBag<StockCalculation>();
 
-                                                CalculateExpensiveComputation(loadedStocks);
+                var executionResult = Parallel.ForEach(loadedStocks, new ParallelOptions { MaxDegreeOfParallelism = 2 }, (stocks, state) =>
+                {
+                    var ticker = stocks.First().Ticker;
 
-                                                #region Ending
-                                                Debug.WriteLine("Completed Operation 1");
-                                                #endregion
-                                            },
-                                            () =>
-                                            {
-                                                #region Starting
-                                                Debug.WriteLine("Starting Operation 2");
-                                                #endregion
+                    Debug.WriteLine($"Start processing {ticker}");
 
-                                                CalculateExpensiveComputation(loadedStocks);
+                    if (ticker == "MSFT")
+                    {
+                        Debug.WriteLine($"Found {ticker}, breaking");
 
-                                                #region Ending
-                                                Debug.WriteLine("Completed Operation 2");
-                                                #endregion
-                                            },
+                        state.Stop();
 
-                                            () =>
-                                            {
-                                                #region Starting
-                                                Debug.WriteLine("Starting Operation 3");
-                                                #endregion
+                        return;
+                    }
 
-                                                CalculateExpensiveComputation(loadedStocks);
+                    var result = CalculateExpensiveComputation(stocks);
 
-                                                #region Ending
-                                                Debug.WriteLine("Completed Operation 3");
-                                                #endregion
-                                            },
+                    var data = new StockCalculation
+                    {
+                        Ticker = stocks.First().Ticker,
+                        Result = result
+                    };
 
-                                            () =>
-                                            {
-                                                #region Starting
-                                                Debug.WriteLine("Starting Operation 4");
-                                                #endregion
+                    values.Add(data);
+                });
 
-                                                CalculateExpensiveComputation(loadedStocks);
-
-                                                #region Ending
-                                                Debug.WriteLine("Completed Operation 4");
-                                                #endregion
-                                            }
-                                        );
-
-                Stocks.ItemsSource = loadedStocks;
+                Stocks.ItemsSource = values.ToArray();
             }
             catch (Exception ex)
             {
@@ -198,5 +173,11 @@ namespace StockAnalyzer.Windows
         {
             Application.Current.Shutdown();
         }
+    };
+
+    class StockCalculation
+    {
+        public string Ticker { get; set; }
+        public decimal Result { get; set; }
     }
 }
