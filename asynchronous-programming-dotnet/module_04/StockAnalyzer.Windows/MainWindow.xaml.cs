@@ -23,6 +23,8 @@ namespace StockAnalyzer.Windows
             InitializeComponent();
         }
 
+        private static object syncRoot = new object();
+
         CancellationTokenSource cancellationTokenSource = null;
 
         private async void Search_Click(object sender, RoutedEventArgs e)
@@ -68,37 +70,27 @@ namespace StockAnalyzer.Windows
                 }
                 #endregion
 
-                var loadedStocks = await Task.WhenAll(tickerLoadingTasks);
+                //var loadedStocks = (await Task.WhenAll(tickerLoadingTasks)).SelectMany(stock => stock).ToArray();
 
-                var values = new ConcurrentBag<StockCalculation>();
+                var loadedStocks = (await Task.WhenAll(tickerLoadingTasks));
 
-                var executionResult = Parallel.ForEach(loadedStocks, new ParallelOptions { MaxDegreeOfParallelism = 2 }, (stocks, state) =>
+                decimal total = 0;
+
+                Parallel.ForEach(loadedStocks, stocks =>
                 {
-                    var ticker = stocks.First().Ticker;
-
-                    Debug.WriteLine($"Start processing {ticker}");
-
-                    if (ticker == "MSFT")
+                    var value = 0m;
+                    foreach (var stock in stocks)
                     {
-                        Debug.WriteLine($"Found {ticker}, breaking");
-
-                        state.Stop();
-
-                        return;
+                        value += Compute(stock);
                     }
 
-                    var result = CalculateExpensiveComputation(stocks);
-
-                    var data = new StockCalculation
+                    lock (syncRoot)
                     {
-                        Ticker = stocks.First().Ticker,
-                        Result = result
-                    };
-
-                    values.Add(data);
+                        total += value;
+                    }
                 });
 
-                Stocks.ItemsSource = values.ToArray();
+                Notes.Text += total.ToString();
             }
             catch (Exception ex)
             {
@@ -172,6 +164,22 @@ namespace StockAnalyzer.Windows
         private void Close_OnClick(object sender, RoutedEventArgs e)
         {
             Application.Current.Shutdown();
+        }
+
+        private decimal Compute(StockPrice stock)
+        {
+            Thread.Yield();
+
+            decimal x = 0;
+            for (var a = 0; a < 10; a++)
+            {
+                for (var b = 0; b < 20; b++)
+                {
+                    x += a + stock.Change;
+                }
+            }
+
+            return x;
         }
     };
 
