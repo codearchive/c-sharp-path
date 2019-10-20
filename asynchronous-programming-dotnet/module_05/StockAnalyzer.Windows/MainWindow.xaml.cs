@@ -53,10 +53,15 @@ namespace StockAnalyzer.Windows
 
             try
             {
-                await WorkInNotepad();
+                var service = new StockService();
+                var operation = Task.Factory.StartNew(async () =>
+                {
+                    var prices = await service.GetStockPricesFor("MSFT", CancellationToken.None);
 
-                Notes.Text += "Notepad closed, congrats";
-                //Stocks.ItemsSource = await GetStocksFor(Ticker.Text);
+                    return prices.Take(5);
+                }).Unwrap();
+
+                var result = await operation;
             }
             catch (Exception ex)
             {
